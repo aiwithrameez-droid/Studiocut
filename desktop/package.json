@@ -1,0 +1,30 @@
+{
+  "name": "studiocut-desktop",
+  "version": "1.0.0",
+  "private": true,
+  "description": "StudioCut desktop launcher for the published video editor",
+  "author": "StudioCut",
+  "main": "main.cjs",
+  "devDependencies": {
+    "electron": "45.0.0",
+    "electron-builder": "26.18.0"
+  },
+  "build": {
+    "appId": "com.studiocut.editor",
+    "productName": "StudioCut",
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "files": ["main.cjs", "package.json"],
+    "directories": { "output": "dist" },
+    "mac": {
+      "target": ["dmg", "zip"],
+      "category": "public.app-category.video",
+      "minimumSystemVersion": "13.0.0",
+      "identity": null
+    },
+    "win": { "target": ["nsis"] },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}

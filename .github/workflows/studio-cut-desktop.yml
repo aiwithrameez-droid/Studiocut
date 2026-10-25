@@ -1,0 +1,71 @@
+name: Build StudioCut desktop apps
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  macos:
+    name: Mac (${{ matrix.variant }})
+    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: intel
+            arch: x64
+          - variant: apple-silicon
+            arch: arm64
+          - variant: intel-monterey
+            arch: x64
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - name: Build macOS 13+ installer
+        if: matrix.variant != 'intel-monterey'
+        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - name: Build Intel macOS Monterey installer
+        if: matrix.variant == 'intel-monterey'
+        run: npx electron-builder --mac dmg zip --x64 --publish never -c.electronVersion=43.8.3 -c.mac.minimumSystemVersion=12.0.0 '-c.artifactName=StudioCut-${version}-${os}-${arch}-macos12.${ext}'
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studiocut-macos-${{ matrix.variant }}
+          path: |
+            desktop/dist/*.dmg
+            desktop/dist/*.zip
+          if-no-files-found: error
+          retention-days: 30
+
+  windows:
+    name: Windows (Intel / AMD 64-bit)
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: desktop
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install --no-audit --no-fund
+      - run: npx electron-builder --win nsis --x64 --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: studiocut-windows-x64
+          path: desktop/dist/*.exe
+          if-no-files-found: error
+          retention-days: 30
