@@ -693,7 +693,7 @@ function WelcomePage() {
 
       <section className="welcome-downloads" aria-labelledby="welcome-downloads-title">
         <div className="welcome-downloads-heading">
-          <p className="welcome-downloads-kicker">DESKTOP BUILDS · v{studioCutPackage.version}</p>
+          <p className="welcome-downloads-kicker">DESKTOP BUILDS · v{desktopVersion}</p>
           <h2 id="welcome-downloads-title">Get StudioCut for desktop</h2>
         </div>
         <div className="welcome-download-grid">

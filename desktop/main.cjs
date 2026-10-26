@@ -19,13 +19,22 @@ function createWindow() {
     width: 1440, height: 940, minWidth: 1024, minHeight: 720,
     backgroundColor: "#101114",
     title: "StudioCut — Signal Cut",
-    show: !smoke,
+    show: !smoke || process.platform === "win32",
     webPreferences: {
       nodeIntegration: false, contextIsolation: true,
       sandbox: true, webviewTag: false,
+      backgroundThrottling: !smoke,
     },
   });
   mainWindow = window;
+  if (smoke) {
+    window.webContents.on("console-message", (_event, details) => {
+      if (details?.level === "error" || details?.level === "warning") {
+        console.log("RENDERER:", details.message);
+      }
+    });
+    window.webContents.on("render-process-gone", (_event, details) => console.error("RENDERER_EXIT:", details.reason));
+  }
   window.webContents.setWindowOpenHandler(({ url }) => {
     const target = new URL(url);
     if (["https:", "mailto:"].includes(target.protocol)) void shell.openExternal(url);

@@ -7,6 +7,11 @@ on:
         description: Draft release to receive the bundled installers
         required: true
         default: studiocut-desktop-v1.1.0
+      build_target:
+        description: Build every installer, or retry Windows only
+        type: choice
+        options: [all, windows]
+        default: all
 
 permissions:
   contents: write
@@ -14,23 +19,11 @@ permissions:
 jobs:
   installers:
     name: ${{ matrix.variant }}
-    runs-on: ${{ matrix.runner }}
+    runs-on: ${{ startsWith(matrix.variant, 'macos') && 'macos-latest' || 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - variant: macos-intel
-            runner: macos-latest
-            arch: x64
-          - variant: macos-apple-silicon
-            runner: macos-latest
-            arch: arm64
-          - variant: macos-intel-monterey
-            runner: macos-latest
-            arch: x64
-          - variant: windows-x64
-            runner: windows-latest
-            arch: x64
+        variant: ${{ fromJSON(inputs.build_target == 'windows' && '["windows-x64"]' || '["macos-intel","macos-apple-silicon","macos-intel-monterey","windows-x64"]') }}
     defaults:
       run:
         working-directory: desktop
@@ -38,6 +31,7 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.release_tag }}
+      BUILD_ARCH: ${{ matrix.variant == 'macos-apple-silicon' && 'arm64' || 'x64' }}
       CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
@@ -60,7 +54,7 @@ jobs:
         run: npx electron-builder --win nsis --x64 --publish never
       - name: Build macOS 13+ installer
         if: runner.os == 'macOS' && matrix.variant != 'macos-intel-monterey'
-        run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
+        run: npx electron-builder --mac dmg zip --"$BUILD_ARCH" --publish never
       - name: Build Intel Monterey installer
         if: matrix.variant == 'macos-intel-monterey'
         run: npx electron-builder --mac dmg zip --x64 --publish never -c.electronVersion=43.8.3 -c.mac.minimumSystemVersion=12.0.0 '-c.artifactName=StudioCut-${version}-${os}-${arch}-macos12.${ext}'
@@ -80,6 +74,12 @@ jobs:
           name: desktop-startup-${{ matrix.variant }}
           path: desktop/desktop-startup.png
           if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: desktop-failure-${{ matrix.variant }}
+          path: desktop/desktop-failure.png
+          if-no-files-found: ignore
       - name: Attach installers to draft release
         shell: bash
         run: |
@@ -94,5 +94,11 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
+      - name: Require all four installers before releasing
+        run: |
+          gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' > names.txt
+          for file in StudioCut-1.1.0-win-x64.exe StudioCut-1.1.0-mac-x64.dmg StudioCut-1.1.0-mac-arm64.dmg StudioCut-1.1.0-mac-x64-macos12.dmg; do
+            grep -Fxq "$file" names.txt || { echo "Missing required installer: $file"; exit 1; }
+          done
       - name: Make unsigned preview downloads available
         run: gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --draft=false --prerelease
