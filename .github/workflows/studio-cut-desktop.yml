@@ -6,7 +6,7 @@ on:
       release_tag:
         description: Draft release to receive the bundled installers
         required: true
-        default: studiocut-desktop-v1.2.2
+        default: studiocut-desktop-v1.2.3
       build_target:
         description: Build every installer, or retry Windows only
         type: choice
@@ -97,7 +97,7 @@ jobs:
       - name: Require all four installers before releasing
         run: |
           gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" --json assets --jq '.assets[].name' > names.txt
-          for file in StudioCut-1.2.2-win-x64.exe StudioCut-1.2.2-mac-x64.dmg StudioCut-1.2.2-mac-arm64.dmg StudioCut-1.2.2-mac-x64-macos12.dmg; do
+          for file in StudioCut-1.2.3-win-x64.exe StudioCut-1.2.3-mac-x64.dmg StudioCut-1.2.3-mac-arm64.dmg StudioCut-1.2.3-mac-x64-macos12.dmg; do
             grep -Fxq "$file" names.txt || { echo "Missing required installer: $file"; exit 1; }
           done
       - name: Make unsigned preview downloads available

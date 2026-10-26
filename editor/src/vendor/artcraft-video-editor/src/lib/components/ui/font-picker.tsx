@@ -59,6 +59,14 @@ export function FontPicker({
     MAX_LIST_HEIGHT,
     filteredFonts.length * ROW_HEIGHT,
   );
+  const currentFamily = defaultValue || "Arial";
+  const installedFontFamilies = useMemo(
+    () =>
+      [...new Set([currentFamily, ...SYSTEM_FONTS])].sort((a, b) =>
+        a.localeCompare(b),
+      ),
+    [currentFamily],
+  );
 
   const handleSelect = useCallback(
     async ({ family }: { family: string }) => {
@@ -152,10 +160,25 @@ export function FontPicker({
         {status === "error" && (
           <div className="flex flex-col items-center gap-3 py-8 px-4">
             <p className="text-sm text-muted-foreground text-center">
-              Failed to load font previews.
+              The font catalog is unavailable. You can still use an installed
+              font.
             </p>
+            <select
+              aria-label="Installed font family"
+              className="border-input bg-accent h-9 w-full rounded-md border px-3 text-sm text-foreground"
+              value={currentFamily}
+              onChange={(event) => {
+                void handleSelect({ family: event.currentTarget.value });
+              }}
+            >
+              {installedFontFamilies.map((family) => (
+                <option key={family} value={family}>
+                  {family}
+                </option>
+              ))}
+            </select>
             <Button variant="outline" size="sm" onClick={handleRetry}>
-              Retry
+              Retry font catalog
             </Button>
           </div>
         )}
