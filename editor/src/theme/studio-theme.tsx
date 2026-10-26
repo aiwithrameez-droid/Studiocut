@@ -80,6 +80,8 @@ const createPastelTheme = (
       "--input": `${hue} 28% 46%`,
       "--ring": primary,
       "--chart-1": primary,
+      "--destructive": "0 72% 38%",
+      "--destructive-foreground": "0 0% 100%",
     },
   };
 };
@@ -120,6 +122,8 @@ const STUDIO_THEMES: StudioTheme[] = [
       "--input": "220 10% 24%",
       "--ring": "65.0526 94.0594% 39.6078%",
       "--chart-1": "65.0526 94.0594% 39.6078%",
+      "--destructive": "0 72% 68%",
+      "--destructive-foreground": "220 14% 8%",
     },
   },
   createPastelTheme("light", "Light", "#c8d6e5", 215),

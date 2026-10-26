@@ -24,6 +24,7 @@ import {
 import { usePropertyDraft } from "../hooks/use-property-draft";
 import { KeyframeToggle } from "./keyframe-toggle";
 import { Textarea } from "../../../components/ui/textarea";
+import { FontPicker } from "../../../components/ui/font-picker";
 
 export function PropertyParamField({
   param,
@@ -138,26 +139,55 @@ function ParamInput({
 
   if (param.type === "text") {
     return (
-      <Textarea
+      <TextParamInput
         value={String(value)}
-        onChange={(event) => onPreview(event.currentTarget.value)}
-        onBlur={onCommit}
+        onPreview={onPreview}
+        onCommit={onCommit}
       />
     );
   }
 
   if (param.type === "font") {
     return (
-      <input
-        className="border-input bg-accent h-9 w-full rounded-md border px-3 text-sm outline-none"
-        value={String(value)}
-        onChange={(event) => onPreview(event.currentTarget.value)}
-        onBlur={onCommit}
+      <FontPicker
+        defaultValue={String(value)}
+        onValueChange={(fontFamily) => {
+          onPreview(fontFamily);
+          onCommit();
+        }}
       />
     );
   }
 
   return null;
+}
+
+function TextParamInput({
+  value,
+  onPreview,
+  onCommit,
+}: {
+  value: string;
+  onPreview: (value: ParamValue) => void;
+  onCommit: () => void;
+}) {
+  const draft = usePropertyDraft({
+    displayValue: value,
+    parse: (input) => input,
+    onPreview,
+    onCommit,
+    supportsExpressions: false,
+  });
+
+  return (
+      <Textarea
+        value={draft.displayValue}
+        className="min-h-20 resize-y"
+        onFocus={draft.onFocus}
+        onChange={draft.onChange}
+        onBlur={draft.onBlur}
+      />
+  );
 }
 
 function NumberParamField({
