@@ -16,9 +16,10 @@ acceleration. High Sierra is unsupported.
 ## Separate installer repository
 
 The separate `aiwithrameez-droid/Studiocut` repository contains packaging files
-only. It receives the compiled renderer as `studiocut-renderer.zip` attached to
-a draft release; no credentials, private project data, or workspace configuration
-are uploaded. Package versions must match the release's installer filenames.
+and a standalone editor source snapshot. GitHub builds the local renderer on
+each native runner; no credentials, private project data, environment files or
+workspace configuration are uploaded. Package versions must match the release's
+installer filenames.
 
 Map the package manifest here to `desktop/package.json`, the runtime files in
 `artifacts/studio-cut/desktop` to `desktop/`, and `build-workflow.yml` to

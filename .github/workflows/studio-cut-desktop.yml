@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: Draft release containing studiocut-renderer.zip
+        description: Draft release to receive the bundled installers
         required: true
         default: studiocut-desktop-v1.1.0
 
@@ -44,15 +44,14 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 24
-      - name: Download bundled local editor
-        run: gh release download "$RELEASE_TAG" --repo "${{ github.repository }}" --pattern studiocut-renderer.zip --dir .
-      - name: Extract editor (Mac)
-        if: runner.os == 'macOS'
-        run: mkdir -p dist/desktop && unzip -q studiocut-renderer.zip -d dist/desktop
-      - name: Extract editor (Windows)
-        if: runner.os == 'Windows'
-        shell: pwsh
-        run: Expand-Archive studiocut-renderer.zip -DestinationPath dist/desktop
+      - name: Install editor dependencies
+        working-directory: editor
+        run: npm install --no-audit --no-fund
+      - name: Build bundled local editor
+        working-directory: editor
+        run: npm run build
+      - name: Copy local editor into desktop package
+        run: mkdir -p dist && cp -R ../editor/dist/desktop dist/desktop
       - run: npm install --no-audit --no-fund
       - name: Smoke-test local editor without internet
         run: npx electron main.cjs --smoke-test
