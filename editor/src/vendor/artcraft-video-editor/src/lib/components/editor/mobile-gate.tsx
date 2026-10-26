@@ -17,6 +17,13 @@ export function MobileGate({ children }: MobileGateProps) {
   const [show, setShow] = useState<boolean | null>(null);
 
   useEffect(() => {
+    // Native window decorations reduce the content width below the web
+    // breakpoint on some desktop displays. A packaged desktop app is not a
+    // mobile browser; do not block its editor behind the mobile warning.
+    if (import.meta.env.MODE === "desktop") {
+      setShow(false);
+      return;
+    }
     const isMobile = window.innerWidth < 1024;
     const acknowledged = localStorage.getItem(STORAGE_KEY) === "true";
     setShow(isMobile && !acknowledged);
