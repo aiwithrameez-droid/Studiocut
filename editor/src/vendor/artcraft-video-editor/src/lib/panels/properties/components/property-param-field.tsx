@@ -25,6 +25,7 @@ import { usePropertyDraft } from "../hooks/use-property-draft";
 import { KeyframeToggle } from "./keyframe-toggle";
 import { Textarea } from "../../../components/ui/textarea";
 import { FontPicker } from "../../../components/ui/font-picker";
+import { Slider } from "../../../components/ui/slider";
 
 export function PropertyParamField({
   param,
@@ -79,6 +80,26 @@ function ParamInput({
   onCommit: () => void;
 }) {
   if (param.type === "number") {
+    if (param.unit === "percent") {
+      const percentage = typeof value === "number" ? value : Number(value);
+      return (
+        <div className="flex items-center gap-3" data-testid={`percentage-${param.key}`}>
+          <Slider
+            aria-label={`${param.label} percentage`}
+            aria-valuetext={`${Math.round(percentage)}%`}
+            min={param.min}
+            max={param.max ?? 100}
+            step={param.step}
+            value={[percentage]}
+            onValueChange={([nextValue]) => onPreview(nextValue)}
+            onValueCommit={onCommit}
+          />
+          <span className="text-muted-foreground min-w-10 text-right text-xs tabular-nums">
+            {Math.round(percentage)}%
+          </span>
+        </div>
+      );
+    }
     return (
       <NumberParamField
         param={param}

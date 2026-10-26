@@ -490,7 +490,19 @@ export class DragDropController {
     target: DropTarget;
     dragData: Extract<TimelineDragData, { type: "effect" }>;
   }): void {
+    const isFootageEffect =
+      dragData.effectType === "skin-smoothing" ||
+      dragData.effectType === "footage-noise-reduction";
     if (target.targetElement) {
+      if (isFootageEffect) {
+        const track = orderedTracks({
+          sceneTracks: this.config.getSceneTracks(),
+        }).find((entry) => entry.id === target.targetElement!.trackId);
+        const element = track?.elements.find(
+          (entry) => entry.id === target.targetElement!.elementId,
+        );
+        if (!element || element.type !== "video" || element.compoundSceneId) return;
+      }
       this.config.addClipEffect({
         trackId: target.targetElement.trackId,
         elementId: target.targetElement.elementId,
@@ -498,6 +510,9 @@ export class DragDropController {
       });
       return;
     }
+
+    // These filters operate on footage, not on an empty scene-effect track.
+    if (isFootageEffect) return;
 
     const element = buildEffectElement({
       effectType: dragData.effectType,

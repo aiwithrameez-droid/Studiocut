@@ -100,6 +100,7 @@ class WasmCompositor {
     const previous = this.cache.get(texture.id);
     if (
       previous?.kind === "external" &&
+      !texture.volatile &&
       previous.source === texture.source &&
       previous.width === texture.width &&
       previous.height === texture.height

@@ -57,6 +57,32 @@ function EffectItem({ effect }: { effect: EffectDefinition }) {
   const editor = useEditor();
 
   const handleAddToTimeline = useCallback(() => {
+    if (
+      effect.type === "skin-smoothing" ||
+      effect.type === "footage-noise-reduction"
+    ) {
+      const selection = editor.timeline.getElementsWithTracks({
+        elements: editor.selection.getSelectedElements(),
+      });
+      const target = selection.length === 1 ? selection[0] : null;
+      if (
+        !target ||
+        target.element.type !== "video" ||
+        target.element.compoundSceneId
+      ) {
+        editor.adapters.toast.info(
+          "Select one footage clip on the timeline to add this effect.",
+        );
+        return;
+      }
+      editor.timeline.addClipEffect({
+        trackId: target.track.id,
+        elementId: target.element.id,
+        effectType: effect.type,
+      });
+      return;
+    }
+
     const currentTime = editor.playback.getCurrentTime();
     const element = buildEffectElement({
       effectType: effect.type,
@@ -80,7 +106,11 @@ function EffectItem({ effect }: { effect: EffectDefinition }) {
         name: effect.name,
         type: "effect",
         effectType: effect.type,
-        targetElementTypes: EFFECT_TARGET_ELEMENT_TYPES,
+        targetElementTypes:
+          effect.type === "skin-smoothing" ||
+          effect.type === "footage-noise-reduction"
+            ? ["video"]
+            : EFFECT_TARGET_ELEMENT_TYPES,
       }}
       onAddToTimeline={handleAddToTimeline}
       aspectRatio={1}

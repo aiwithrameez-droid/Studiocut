@@ -4,6 +4,10 @@ import {
   initializeGpu,
 } from "opencut-wasm";
 import type { EffectPass, EffectUniformValue } from "../../effects/types";
+import {
+  applyCustomEffectPass,
+  isCustomEffectShader,
+} from "./custom-effect-renderer";
 
 let gpuAvailable = false;
 let initPromise: Promise<void> | null = null;
@@ -74,12 +78,32 @@ export const gpuRenderer = {
       return source;
     }
 
-    return applyEffectPasses({
-      source,
-      width,
-      height,
-      passes: serializeEffectPasses(passes),
-    });
+    let current = source;
+    for (let index = 0; index < passes.length; ) {
+      if (isCustomEffectShader(passes[index]!.shader)) {
+        current = applyCustomEffectPass({
+          source: current,
+          width,
+          height,
+          pass: passes[index]!,
+        });
+        index += 1;
+        continue;
+      }
+
+      let end = index + 1;
+      while (end < passes.length && !isCustomEffectShader(passes[end]!.shader)) {
+        end += 1;
+      }
+      current = applyEffectPasses({
+        source: current,
+        width,
+        height,
+        passes: serializeEffectPasses(passes.slice(index, end)),
+      });
+      index = end;
+    }
+    return current;
   },
 
   applyMaskFeather({

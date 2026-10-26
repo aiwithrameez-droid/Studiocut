@@ -56,6 +56,8 @@ export type ExternalTextureDescriptor = {
   source: CanvasImageSource;
   width: number;
   height: number;
+  /** Re-upload a stable canvas when its pixels change on every video frame. */
+  volatile?: boolean;
 };
 
 /**

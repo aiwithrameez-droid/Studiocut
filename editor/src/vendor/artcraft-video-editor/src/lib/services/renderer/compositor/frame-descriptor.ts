@@ -26,6 +26,8 @@ import type {
   TextureUploadDescriptor,
 } from "./types";
 import { DEFAULT_GRAPHIC_SOURCE_SIZE } from "../../../graphics";
+import { gpuRenderer, initializeGpuRenderer, isGpuAvailable } from "../gpu-renderer";
+import { isCustomEffectShader, persistCustomEffectOutput, retainCustomEffectOutputs } from "../custom-effect-renderer";
 
 export async function buildFrameDescriptor({
   node,
@@ -48,6 +50,25 @@ export async function buildFrameDescriptor({
     textures,
   });
 
+  const hasCustomLayerEffects = items.some(
+    (item) =>
+      item.type === "layer" &&
+      item.effectPassGroups.some((group) =>
+        group.some((pass) => isCustomEffectShader(pass.shader)),
+      ),
+  );
+  if (hasCustomLayerEffects) {
+    await initializeGpuRenderer();
+    if (!isGpuAvailable()) {
+      throw new Error(
+        "Skin smoothing and footage noise reduction require an available GPU. Enable hardware acceleration and try again.",
+      );
+    }
+    applyCustomLayerEffects({ items, textures });
+  } else {
+    retainCustomEffectOutputs(new Set());
+  }
+
   incrementCounter({ name: "frameItems", by: items.length });
   incrementCounter({ name: "frameTextures", by: textures.size });
 
@@ -62,6 +83,74 @@ export async function buildFrameDescriptor({
     },
     textures: [...textures.values()],
   };
+}
+
+function applyCustomLayerEffects({
+  items,
+  textures,
+}: {
+  items: FrameItemDescriptor[];
+  textures: Map<string, TextureUploadDescriptor>;
+}): void {
+  const activeTextureIds = new Set<string>();
+  for (const item of items) {
+    if (item.type !== "layer") continue;
+    const hasCustomEffect = item.effectPassGroups.some((group) =>
+      group.some((pass) => isCustomEffectShader(pass.shader)),
+    );
+    if (!hasCustomEffect) continue;
+
+    const texture = textures.get(item.textureId);
+    if (!texture) continue;
+    let sourceCanvas: OffscreenCanvas | null =
+      texture.kind === "external" &&
+      typeof OffscreenCanvas !== "undefined" &&
+      texture.source instanceof OffscreenCanvas
+        ? texture.source
+        : null;
+    if (!sourceCanvas) {
+      const surface = createCanvasSurface({
+        width: texture.width,
+        height: texture.height,
+      });
+      if (texture.kind === "external") {
+        surface.context.drawImage(
+          texture.source,
+          0,
+          0,
+          texture.width,
+          texture.height,
+        );
+      } else {
+        texture.draw(surface.context);
+      }
+      sourceCanvas = surface.canvas;
+    }
+
+    const effected = gpuRenderer.applyEffect({
+      source: sourceCanvas,
+      width: texture.width,
+      height: texture.height,
+      passes: item.effectPassGroups.flat(),
+    });
+    const output = persistCustomEffectOutput({
+      textureId: item.textureId,
+      source: effected,
+      width: texture.width,
+      height: texture.height,
+    });
+    textures.set(item.textureId, {
+      kind: "external",
+      id: item.textureId,
+      source: output,
+      width: texture.width,
+      height: texture.height,
+      volatile: true,
+    });
+    item.effectPassGroups = [];
+    activeTextureIds.add(item.textureId);
+  }
+  retainCustomEffectOutputs(activeTextureIds);
 }
 
 async function collectNode({
