@@ -296,7 +296,7 @@ function ExportPopover({
   return (
     <DialogContent
       aria-describedby="export-project-description"
-      className="flex w-[calc(100%-2rem)] max-w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden bg-ui-controls p-0"
+      className="flex w-[calc(100%-2rem)] max-w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden bg-popover text-popover-foreground p-0"
     >
       <div className="shrink-0 border-b border-ui-controls-border p-4 pr-14">
         <DialogTitle className="text-sm font-semibold">
