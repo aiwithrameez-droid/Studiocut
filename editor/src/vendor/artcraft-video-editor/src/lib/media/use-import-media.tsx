@@ -38,12 +38,14 @@ export function useImportMedia() {
         promise: async () => {
           const processed = await processMediaAssets({ files, toast, mediaSource });
           for (const asset of processed) {
-            await editor.media.addMediaAsset({
+            const added = await editor.media.addMediaAsset({
               projectId: activeProject.metadata.id,
               asset,
             });
+            if (!added) throw new Error(`Could not add ${asset.name} to this project.`);
           }
           if (processed.length > 0) {
+            await editor.project.saveCurrentProject();
             useAssetsPanelStore.getState().setActiveTab("media");
           }
           return {

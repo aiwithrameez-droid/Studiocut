@@ -101,6 +101,7 @@ export function MediaView() {
               asset,
             });
           }
+          await editor.project.saveCurrentProject();
           return {
             uploadedCount: processedAssets.length,
             assetNames: processedAssets.map((asset) => asset.name),
@@ -211,6 +212,7 @@ export function MediaView() {
               asset,
             });
           }
+          await editor.project.saveCurrentProject();
           return {
             uploadedCount: processedAssets.length,
             assetNames: processedAssets.map((asset) => asset.name),

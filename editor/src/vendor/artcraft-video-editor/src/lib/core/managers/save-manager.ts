@@ -28,6 +28,9 @@ export class SaveManager {
     if (this.unsubscribeHandlers.length > 0) return;
 
     this.unsubscribeHandlers = [
+      this.editor.media.subscribe(() => {
+        this.markDirty();
+      }),
       this.editor.scenes.subscribe(() => {
         this.markDirty();
       }),
