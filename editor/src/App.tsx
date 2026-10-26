@@ -48,8 +48,8 @@ import {
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const isDesktopBuild = import.meta.env.MODE === 'desktop';
-const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/download/studiocut-desktop-v1.2.4';
-const desktopVersion = '1.2.4';
+const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/download/studiocut-desktop-v1.2.5';
+const desktopVersion = '1.2.5';
 const desktopDownloads = [
   {
     label: 'Windows x64',

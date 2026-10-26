@@ -56,6 +56,26 @@ export function PropertiesPanel() {
   if (!elementWithTrack) return null;
 
   const { element, track } = elementWithTrack;
+  if (element.type === "video" && element.compoundSceneId) {
+    const sceneId = element.compoundSceneId;
+    return (
+      <div className="panel bg-background flex h-full flex-col gap-3 overflow-auto rounded-lg border border-ui-panel-border p-4">
+        <p className="text-sm font-semibold">{element.name}</p>
+        <p className="text-muted-foreground text-xs leading-5">
+          This is an editable nested sequence. Move or trim it on this timeline,
+          or open it to change the original clips, titles, styling and audio.
+        </p>
+        <Button onClick={() => void editor.scenes.switchToScene({ sceneId })}>
+          Edit compound clip
+        </Button>
+        <p className="text-muted-foreground text-xs leading-5">
+          Use Back to parent above the nested timeline to return. This compound
+          keeps its original length; nested edits outside that range are not
+          included. Trim its edges in the parent timeline as needed.
+        </p>
+      </div>
+    );
+  }
   const config = getPropertiesConfig({ element, mediaAssets });
   const visibleTabs = config.tabs;
 

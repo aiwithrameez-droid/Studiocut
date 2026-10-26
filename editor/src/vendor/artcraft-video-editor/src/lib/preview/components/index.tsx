@@ -127,6 +127,7 @@ function RenderTreeController() {
     (e) => e.timeline.getPreviewTracks() ?? e.scenes.getActiveScene().tracks,
   );
   const mediaAssets = useEditor((e) => e.media.getAssets());
+  const scenes = useEditor((e) => e.scenes.getScenes());
   const activeProject = useEditor((e) => e.project.getActive());
 
   const { width, height } = usePreviewSize();
@@ -137,6 +138,7 @@ function RenderTreeController() {
     const duration = editor.timeline.getTotalDuration();
     const renderTree = buildScene({
       tracks,
+      scenes,
       mediaAssets,
       duration,
       canvasSize: { width, height },
@@ -145,7 +147,7 @@ function RenderTreeController() {
     });
 
     editor.renderer.setRenderTree({ renderTree });
-  }, [tracks, mediaAssets, activeProject?.settings.background, width, height]);
+  }, [tracks, scenes, mediaAssets, activeProject?.settings.background, width, height]);
 
   return null;
 }

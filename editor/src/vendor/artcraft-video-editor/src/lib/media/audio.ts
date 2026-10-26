@@ -35,7 +35,9 @@ import type {
   LibraryAudioElement,
   RetimeConfig,
   SceneTracks,
+  TScene,
 } from "../timeline/types";
+import { getCompoundClipTracks } from "../timeline/compound-clips";
 import type { AudioCapableElement } from "../timeline/audio-state";
 import {
   hasAnimatedVolume,
@@ -182,10 +184,14 @@ export async function collectAudioElements({
   tracks,
   mediaAssets,
   audioContext,
+  scenes = [],
+  compoundPath = [],
 }: {
   tracks: SceneTracks;
   mediaAssets: MediaAsset[];
   audioContext: AudioContext;
+  scenes?: TScene[];
+  compoundPath?: string[];
 }): Promise<CollectedAudioElement[]> {
   const candidates = collectAudibleCandidates({ tracks, mediaAssets });
   const mediaMap = new Map<string, MediaAsset>(
@@ -256,7 +262,52 @@ export async function collectAudioElements({
   for (const element of resolvedElements) {
     if (element) audioElements.push(element);
   }
-  return audioElements;
+
+  const nestedAudio = await Promise.all(
+    getCompoundElements({ tracks }).map(async ({ element, trackMuted }) => {
+      if (compoundPath.includes(element.compoundSceneId!)) return [];
+      const nestedTracks = getCompoundClipTracks({ element, scenes });
+      if (!nestedTracks) return [];
+      const nested = await collectAudioElements({
+        tracks: nestedTracks,
+        mediaAssets,
+        audioContext,
+        scenes,
+        compoundPath: [...compoundPath, element.compoundSceneId!],
+      });
+      const volume = resolveEffectiveAudioGain({
+        element,
+        trackMuted,
+        localTime: 0,
+      });
+      const muted = isElementMuted({ element });
+      return nested.map((audio) => ({
+        ...audio,
+        volume: audio.volume * volume,
+        muted: audio.muted || muted,
+      }));
+    }),
+  );
+
+  return [...audioElements, ...nestedAudio.flat()];
+}
+
+function getCompoundElements({ tracks }: { tracks: SceneTracks }): Array<{
+  element: VideoElement & { compoundSceneId: string };
+  trackMuted: boolean;
+}> {
+  return [...tracks.overlay, tracks.main, ...tracks.audio].flatMap((track) =>
+    track.elements.flatMap((element) =>
+      element.type === "video" && element.compoundSceneId
+        ? [
+            {
+              element,
+              trackMuted: "muted" in track && !!track.muted,
+            },
+          ]
+        : [],
+    ),
+  );
 }
 
 export async function collectAudioMixSources({
@@ -325,9 +376,13 @@ export async function collectAudioMixSources({
 export async function collectAudioClips({
   tracks,
   mediaAssets,
+  scenes = [],
+  compoundPath = [],
 }: {
   tracks: SceneTracks;
   mediaAssets: MediaAsset[];
+  scenes?: TScene[];
+  compoundPath?: string[];
 }): Promise<AudioClipSource[]> {
   const orderedTracks = [...tracks.overlay, tracks.main, ...tracks.audio];
   const clips: AudioClipSource[] = [];
@@ -335,6 +390,32 @@ export async function collectAudioClips({
     mediaAssets.map((asset) => [asset.id, asset]),
   );
   const pendingLibraryClips: Array<Promise<AudioClipSource | null>> = [];
+  const nestedClips = await Promise.all(
+    getCompoundElements({ tracks }).map(async ({ element, trackMuted }) => {
+      if (compoundPath.includes(element.compoundSceneId!)) return [];
+      const nestedTracks = getCompoundClipTracks({ element, scenes });
+      if (!nestedTracks) return [];
+      const nested = await collectAudioClips({
+        tracks: nestedTracks,
+        mediaAssets,
+        scenes,
+        compoundPath: [...compoundPath, element.compoundSceneId!],
+      });
+      const volume = resolveEffectiveAudioGain({
+        element,
+        trackMuted,
+        localTime: 0,
+      });
+      const muted = isElementMuted({ element });
+      return nested.map((clip) => ({
+        ...clip,
+        id: `${element.id}:${clip.id}`,
+        volume: clip.volume * volume,
+        muted: clip.muted || muted,
+      }));
+    }),
+  );
+  clips.push(...nestedClips.flat());
 
   for (const track of orderedTracks) {
     const isTrackMuted = canTrackHaveAudio(track) && track.muted;
@@ -404,12 +485,14 @@ export async function createTimelineAudioBuffer({
   duration,
   sampleRate = EXPORT_SAMPLE_RATE,
   audioContext,
+  scenes = [],
 }: {
   tracks: SceneTracks;
   mediaAssets: MediaAsset[];
   duration: number;
   sampleRate?: number;
   audioContext?: AudioContext;
+  scenes?: TScene[];
 }): Promise<AudioBuffer | null> {
   const context = audioContext ?? createAudioContext({ sampleRate });
 
@@ -417,6 +500,7 @@ export async function createTimelineAudioBuffer({
     tracks,
     mediaAssets,
     audioContext: context,
+    scenes,
   });
 
   if (audioElements.length === 0) return null;

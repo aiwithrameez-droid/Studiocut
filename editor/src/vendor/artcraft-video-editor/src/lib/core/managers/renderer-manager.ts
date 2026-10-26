@@ -172,12 +172,14 @@ export class RendererManager {
         audioBuffer = await createTimelineAudioBuffer({
           tracks,
           mediaAssets,
+          scenes: activeProject.scenes,
           duration,
         });
       }
 
       const scene = buildScene({
         tracks,
+        scenes: activeProject.scenes,
         mediaAssets,
         duration,
         canvasSize,

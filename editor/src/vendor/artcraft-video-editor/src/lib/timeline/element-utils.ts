@@ -49,18 +49,21 @@ export function canElementHaveAudio(
 export function isVisualElement(
   element: TimelineElement,
 ): element is VisualElement {
+  if (element.type === "video" && element.compoundSceneId) return false;
   return (VISUAL_ELEMENT_TYPES as readonly string[]).includes(element.type);
 }
 
 export function isMaskableElement(
   element: TimelineElement,
 ): element is MaskableElement {
+  if (element.type === "video" && element.compoundSceneId) return false;
   return (MASKABLE_ELEMENT_TYPES as readonly string[]).includes(element.type);
 }
 
 export function isRetimableElement(
   element: TimelineElement,
 ): element is RetimableElement {
+  if (element.type === "video" && element.compoundSceneId) return false;
   return (RETIMABLE_ELEMENT_TYPES as readonly string[]).includes(element.type);
 }
 
@@ -81,6 +84,7 @@ export function hasElementEffects({
 export function hasMediaId(
   element: TimelineElement,
 ): element is UploadAudioElement | VideoElement | ImageElement {
+  if (element.type === "video" && element.compoundSceneId) return false;
   return "mediaId" in element;
 }
 
@@ -90,13 +94,13 @@ export function requiresMediaId({
   element: CreateTimelineElement;
 }): boolean {
   return (
-    element.type === "video" ||
+    (element.type === "video" && !element.compoundSceneId) ||
     element.type === "image" ||
     (element.type === "audio" && element.sourceType === "upload")
   );
 }
 
-function buildDefaultElementParams({
+export function buildDefaultElementParams({
   type,
 }: {
   type: TimelineElement["type"];

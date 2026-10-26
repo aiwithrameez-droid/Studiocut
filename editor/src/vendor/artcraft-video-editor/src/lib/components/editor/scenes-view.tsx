@@ -80,6 +80,9 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
         await editor.scenes.deleteScene({ sceneId });
       } catch (error) {
         console.error("Failed to delete scene:", error);
+        toast.error(
+          error instanceof Error ? error.message : "Failed to delete scene",
+        );
       }
     }
     setSelectedScenes(new Set());
@@ -156,7 +159,9 @@ export function ScenesView({ children }: { children: React.ReactNode }) {
                   )}
                   onClick={() => handleSceneSwitch(scene.id)}
                 >
-                  <span>{scene.name}</span>
+                  <span>
+                    {scene.parentSceneId ? `↳ ${scene.name}` : scene.name}
+                  </span>
                   <div className="flex items-center gap-2">
                     {((isSelectMode && selectedScenes.has(scene.id)) ||
                       (!isSelectMode && currentScene?.id === scene.id)) && (

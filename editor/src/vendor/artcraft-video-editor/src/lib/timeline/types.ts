@@ -20,6 +20,7 @@ export interface TScene {
   id: string;
   name: string;
   isMain: boolean;
+  parentSceneId?: string;
   tracks: SceneTracks;
   bookmarks: Bookmark[];
   createdAt: Date;
@@ -117,6 +118,8 @@ interface BaseTimelineElement {
 export interface VideoElement extends BaseTimelineElement {
   type: "video";
   mediaId: string;
+  /** Points to a nested scene when this timeline clip is a compound clip. */
+  compoundSceneId?: string;
   isSourceAudioEnabled?: boolean;
   hidden?: boolean;
   retime?: RetimeConfig;

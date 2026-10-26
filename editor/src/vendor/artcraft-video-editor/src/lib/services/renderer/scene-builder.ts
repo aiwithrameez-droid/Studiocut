@@ -1,5 +1,6 @@
-import type { SceneTracks, TimelineTrack } from "../../timeline/types";
+import type { SceneTracks, TScene, TimelineTrack } from "../../timeline/types";
 import type { MediaAsset } from "../../media/types";
+import { getCompoundClipTracks } from "../../timeline/compound-clips";
 import { RootNode } from "./nodes/root-node";
 import { VideoNode } from "./nodes/video-node";
 import { ImageNode } from "./nodes/image-node";
@@ -35,11 +36,15 @@ function buildTrackNodes({
   mediaMap,
   canvasSize,
   isPreview,
+  scenes,
+  compoundPath = [],
 }: {
   tracks: TimelineTrack[];
   mediaMap: Map<string, MediaAsset>;
   canvasSize: TCanvasSize;
   isPreview?: boolean;
+  scenes: TScene[];
+  compoundPath?: string[];
 }): AnyBaseNode[] {
   const nodes: AnyBaseNode[] = [];
 
@@ -47,6 +52,34 @@ function buildTrackNodes({
     const elements = getVisibleSortedElements({ track });
 
     for (const element of elements) {
+      if (element.type === "video" && element.compoundSceneId) {
+        if (compoundPath.includes(element.compoundSceneId)) continue;
+        const nestedTracks = getCompoundClipTracks({
+          element,
+          scenes,
+        });
+        if (!nestedTracks) continue;
+
+        const nestedSceneTracks = [
+          ...nestedTracks.overlay.filter(
+            (nestedTrack) => !("hidden" in nestedTrack && nestedTrack.hidden),
+          ),
+          ...(!nestedTracks.main.hidden ? [nestedTracks.main] : []),
+        ].reverse();
+
+        nodes.push(
+          ...buildTrackNodes({
+            tracks: nestedSceneTracks,
+            mediaMap,
+            canvasSize,
+            isPreview,
+            scenes,
+            compoundPath: [...compoundPath, element.compoundSceneId],
+          }),
+        );
+        continue;
+      }
+
       if (element.type === "effect") {
         nodes.push(
           new EffectLayerNode({
@@ -218,6 +251,7 @@ function buildBlurBackgroundNodes({
 export type BuildSceneParams = {
   canvasSize: TCanvasSize;
   tracks: SceneTracks;
+  scenes?: TScene[];
   mediaAssets: MediaAsset[];
   duration: number;
   background: TBackground;
@@ -227,6 +261,7 @@ export type BuildSceneParams = {
 export function buildScene({
   canvasSize,
   tracks,
+  scenes = [],
   mediaAssets,
   duration,
   background,
@@ -247,6 +282,7 @@ export function buildScene({
     mediaMap,
     canvasSize,
     isPreview,
+    scenes,
   });
 
   if (background.type === "blur") {

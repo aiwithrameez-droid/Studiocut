@@ -51,6 +51,22 @@ export class ScenesManager {
       throw new Error("Scene not found");
     }
 
+    const isUsedByCompoundClip = this.list.some((scene) =>
+      [...scene.tracks.overlay, scene.tracks.main, ...scene.tracks.audio].some(
+        (track) =>
+          track.elements.some(
+            (element) =>
+              element.type === "video" &&
+              element.compoundSceneId === sceneId,
+          ),
+      ),
+    );
+    if (isUsedByCompoundClip) {
+      throw new Error(
+        "Remove the compound clip from its parent timeline before deleting its nested scene.",
+      );
+    }
+
     const { canDelete, reason } = canDeleteScene({ scene: sceneToDelete });
     if (!canDelete) {
       throw new Error(reason);
@@ -89,6 +105,8 @@ export class ScenesManager {
       throw new Error("Scene not found");
     }
 
+    this.editor.playback.pause();
+    this.editor.selection.clearSelection();
     const activeProject = this.editor.project.getActive();
 
     if (activeProject) {
@@ -105,6 +123,7 @@ export class ScenesManager {
     }
 
     this.active = targetScene;
+    this.editor.playback.seek({ time: 0 as MediaTime });
     this.notify();
   }
 
@@ -249,6 +268,7 @@ export class ScenesManager {
       const updatedProject = {
         ...activeProject,
         scenes,
+        currentSceneId: this.active?.id ?? activeProject.currentSceneId,
         metadata: {
           ...activeProject.metadata,
           updatedAt: new Date(),

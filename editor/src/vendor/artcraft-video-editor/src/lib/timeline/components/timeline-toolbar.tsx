@@ -250,10 +250,23 @@ function ToolbarLeftSection() {
 
 function SceneSelector() {
   const editor = useEditor();
-  const currentScene = editor.scenes.getActiveScene();
+  const currentScene = useEditor((e) => e.scenes.getActiveScene());
 
   return (
-    <div>
+    <div className="flex items-center gap-2">
+      {currentScene.parentSceneId && (
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            void editor.scenes.switchToScene({
+              sceneId: currentScene.parentSceneId!,
+            })
+          }
+        >
+          Back to parent
+        </Button>
+      )}
       <SplitButton className="border-foreground/10 border">
         <SplitButtonLeft>{currentScene?.name || "No Scene"}</SplitButtonLeft>
         <SplitButtonSeparator />

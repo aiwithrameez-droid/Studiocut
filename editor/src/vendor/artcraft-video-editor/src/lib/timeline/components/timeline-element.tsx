@@ -62,6 +62,7 @@ import {
 import { useElementSelection } from "../hooks/element/use-element-selection";
 import { resolveStickerId } from "../../stickers";
 import { buildGraphicPreviewUrl } from "../../graphics";
+import { CreateCompoundClipCommand } from "../../commands/timeline/element/create-compound-clip";
 // next/image replaced with <img> tag for non-Next environments
 import {
   ScissorIcon,
@@ -76,6 +77,7 @@ import {
   Exchange01Icon,
   KeyframeIcon,
   MagicWand05Icon,
+  Layers01Icon,
 } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
 import { uppercase } from "../../utils/string";
@@ -232,6 +234,7 @@ export function TimelineElement({
   dragView,
   isDropTarget = false,
 }: TimelineElementProps) {
+  const editor = useEditor();
   const mediaAssets = useEditor((e) => e.media.getAssets());
   const { selectedElements } = useElementSelection();
   const requestRevealMedia = useAssetsPanelStore((s) => s.requestRevealMedia);
@@ -254,6 +257,14 @@ export function TimelineElement({
     (selected) =>
       selected.elementId === element.id && selected.trackId === track.id,
   );
+  const compoundScene =
+    element.type === "video" && element.compoundSceneId
+      ? (editor.scenes
+          .getScenes()
+          .find((scene) => scene.id === element.compoundSceneId) ?? null)
+      : null;
+  const canCreateCompoundClip =
+    selectedElements.length >= 2 && isCurrentElementSelected;
 
   const isDragging = dragView.kind === "dragging";
   const dragTimeOffset = isDragging
@@ -376,7 +387,15 @@ export function TimelineElement({
 
   return (
     <PixelsPerSecondContext.Provider value={timelinePixelsPerSecond}>
-      <ContextMenu>
+      <ContextMenu
+        onOpenChange={(isOpen) => {
+          if (isOpen && !isCurrentElementSelected) {
+            editor.selection.setSelectedElements({
+              elements: [{ trackId: track.id, elementId: element.id }],
+            });
+          }
+        }}
+      >
         <ContextMenuTrigger asChild>
           <div
             className="absolute top-0 select-none"
@@ -464,6 +483,32 @@ export function TimelineElement({
               {sourceAudioLabel}
             </ContextMenuItem>
           )}
+          {canCreateCompoundClip && (
+            <ContextMenuItem
+              icon={<HugeiconsIcon icon={Layers01Icon} />}
+              onClick={(event: React.MouseEvent) => {
+                event.stopPropagation();
+                editor.command.execute({
+                  command: new CreateCompoundClipCommand(),
+                });
+              }}
+            >
+              Create compound clip
+            </ContextMenuItem>
+          )}
+          {compoundScene && (
+            <ContextMenuItem
+              icon={<HugeiconsIcon icon={Layers01Icon} />}
+              onClick={(event: React.MouseEvent) => {
+                event.stopPropagation();
+                void editor.scenes.switchToScene({
+                  sceneId: compoundScene.id,
+                });
+              }}
+            >
+              Edit compound clip
+            </ContextMenuItem>
+          )}
           {canElementBeHidden(element) && (
             <VisibilityMenuItem
               element={element}
@@ -482,7 +527,9 @@ export function TimelineElement({
               {isExpanded ? "Collapse keyframes" : "Expand keyframes"}
             </ContextMenuItem>
           )}
-          {selectedElements.length === 1 && hasMediaId(element) && (
+          {selectedElements.length === 1 &&
+            hasMediaId(element) &&
+            !compoundScene && (
             <>
               <ContextMenuItem
                 icon={<HugeiconsIcon icon={Search01Icon} />}
@@ -1183,6 +1230,20 @@ function ElementContent({ element, track }: ElementContentProps) {
     case "audio":
       return <AudioElementContent element={element} trackId={track.id} />;
     case "video":
+      if (element.compoundSceneId) {
+        return (
+          <div
+            data-testid={`timeline-compound-clip-${element.id}`}
+            className="flex h-full min-w-0 flex-1 items-center gap-1.5 overflow-hidden px-2 text-white/90"
+          >
+            <HugeiconsIcon icon={Layers01Icon} className="size-3.5 shrink-0" />
+            <span className="truncate text-[0.65rem] font-medium">
+              {element.name || "Compound clip"}
+            </span>
+          </div>
+        );
+      }
+      return <TiledMediaContent element={element} track={track} />;
     case "image":
       return <TiledMediaContent element={element} track={track} />;
   }
