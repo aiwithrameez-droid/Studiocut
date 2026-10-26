@@ -64,20 +64,27 @@ jobs:
       - name: Build Intel Monterey installer
         if: matrix.variant == 'macos-intel-monterey'
         run: npx electron-builder --mac dmg zip --x64 --publish never -c.electronVersion=43.8.3 -c.mac.minimumSystemVersion=12.0.0 '-c.artifactName=StudioCut-${version}-${os}-${arch}-macos12.${ext}'
+      - name: Verify the installer contains the editor and WASM
+        run: node verify-package.cjs
       - uses: actions/upload-artifact@v4
         with:
           name: studiocut-${{ matrix.variant }}
           path: |
-            desktop/dist/*.dmg
-            desktop/dist/*.zip
-            desktop/dist/*.exe
+            desktop/installers/*.dmg
+            desktop/installers/*.zip
+            desktop/installers/*.exe
           if-no-files-found: error
           retention-days: 30
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-startup-${{ matrix.variant }}
+          path: desktop/desktop-startup.png
+          if-no-files-found: error
       - name: Attach installers to draft release
         shell: bash
         run: |
           shopt -s nullglob
-          files=(dist/*.dmg dist/*.zip dist/*.exe)
+          files=(installers/*.dmg installers/*.zip installers/*.exe)
           gh release upload "$RELEASE_TAG" "${files[@]}" --repo "${{ github.repository }}" --clobber
 
   finish:

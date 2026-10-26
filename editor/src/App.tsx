@@ -1,6 +1,5 @@
 import { type PointerEvent as ReactPointerEvent, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery, useQueryClient } from '@tanstack/react-query';
-import studioCutPackage from '../package.json';
 import { ErrorBoundary } from '@/components/error-boundary';
 import { Toaster } from '@/components/ui/toaster';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -49,22 +48,28 @@ import {
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const isDesktopBuild = import.meta.env.MODE === 'desktop';
-const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/latest/download';
+const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/download/studiocut-desktop-v1.1.0';
+const desktopVersion = '1.1.0';
 const desktopDownloads = [
   {
     label: 'Windows x64',
-    detail: 'Installer · .exe',
-    fileName: `StudioCut-${studioCutPackage.version}-win-x64.exe`,
+    detail: 'Windows 10+ · Unsigned .exe',
+    fileName: `StudioCut-${desktopVersion}-win-x64.exe`,
   },
   {
     label: 'Mac · Intel',
     detail: 'macOS 13+ · Unsigned',
-    fileName: `StudioCut-${studioCutPackage.version}-mac-x64.dmg`,
+    fileName: `StudioCut-${desktopVersion}-mac-x64.dmg`,
   },
   {
     label: 'Mac · Apple Silicon',
     detail: 'macOS 13+ · Unsigned',
-    fileName: `StudioCut-${studioCutPackage.version}-mac-arm64.dmg`,
+    fileName: `StudioCut-${desktopVersion}-mac-arm64.dmg`,
+  },
+  {
+    label: 'Mac · Intel Monterey',
+    detail: 'macOS 12+ · Unsigned',
+    fileName: `StudioCut-${desktopVersion}-mac-x64-macos12.dmg`,
   },
 ];
 const clerkPubKey = isDesktopBuild ? '' : publishableKeyFromHost(
@@ -708,7 +713,7 @@ function WelcomePage() {
           ))}
         </div>
         <p className="welcome-download-note">
-          Mac builds are unsigned and may show a Gatekeeper warning. The Windows installer is also unsigned and may show a SmartScreen warning.
+          Bundled local editor · Windows 10+ or supported macOS 12/13+ builds. High Sierra is not supported. These preview installers are unsigned and may show Gatekeeper or SmartScreen warnings. Desktop projects are separate from browser projects; use project backups to transfer your work.
         </p>
       </section>
 

@@ -21,6 +21,8 @@ module.exports = async function smokeTest(window, app) {
       !!document.querySelector('[data-testid="button-import-media"]')
     `);
     if (ready) {
+      const image = await window.webContents.capturePage();
+      await require("node:fs/promises").writeFile("desktop-startup.png", image.toPNG());
       console.log("DESKTOP_SMOKE_OK: bundled editor opened a local project with network blocked");
       app.exit(0);
       return;

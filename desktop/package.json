@@ -4,6 +4,10 @@
   "private": true,
   "description": "StudioCut bundled local-first desktop video editor",
   "author": "StudioCut",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aiwithrameez-droid/Studiocut.git"
+  },
   "main": "main.cjs",
   "devDependencies": {
     "electron": "45.0.0",
@@ -14,7 +18,13 @@
     "productName": "StudioCut",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
     "files": ["main.cjs", "local-content.cjs", "smoke-test.cjs", "dist/desktop/**/*", "licenses/**/*", "package.json"],
-    "directories": { "output": "dist" },
+    "directories": { "output": "installers" },
+    "publish": [{
+      "provider": "github",
+      "owner": "aiwithrameez-droid",
+      "repo": "Studiocut",
+      "releaseType": "prerelease"
+    }],
     "mac": {
       "target": ["dmg", "zip"],
       "category": "public.app-category.video",
