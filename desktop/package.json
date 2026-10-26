@@ -1,8 +1,8 @@
 {
   "name": "studiocut-desktop",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
-  "description": "StudioCut desktop launcher for the published video editor",
+  "description": "StudioCut bundled local-first desktop video editor",
   "author": "StudioCut",
   "main": "main.cjs",
   "devDependencies": {
@@ -13,7 +13,7 @@
     "appId": "com.studiocut.editor",
     "productName": "StudioCut",
     "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
-    "files": ["main.cjs", "package.json"],
+    "files": ["main.cjs", "local-content.cjs", "smoke-test.cjs", "dist/desktop/**/*", "licenses/**/*", "package.json"],
     "directories": { "output": "dist" },
     "mac": {
       "target": ["dmg", "zip"],

@@ -1,71 +1,92 @@
-name: Build StudioCut desktop apps
+name: Build bundled StudioCut desktop apps
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Draft release containing studiocut-renderer.zip
+        required: true
+        default: studiocut-desktop-v1.1.0
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  macos:
-    name: Mac (${{ matrix.variant }})
-    runs-on: macos-latest
+  installers:
+    name: ${{ matrix.variant }}
+    runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - variant: intel
+          - variant: macos-intel
+            runner: macos-latest
             arch: x64
-          - variant: apple-silicon
+          - variant: macos-apple-silicon
+            runner: macos-latest
             arch: arm64
-          - variant: intel-monterey
+          - variant: macos-intel-monterey
+            runner: macos-latest
+            arch: x64
+          - variant: windows-x64
+            runner: windows-latest
             arch: x64
     defaults:
       run:
         working-directory: desktop
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      CSC_IDENTITY_AUTO_DISCOVERY: "false"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Download bundled local editor
+        run: gh release download "$RELEASE_TAG" --repo "${{ github.repository }}" --pattern studiocut-renderer.zip --dir .
+      - name: Extract editor (Mac)
+        if: runner.os == 'macOS'
+        run: mkdir -p dist/desktop && unzip -q studiocut-renderer.zip -d dist/desktop
+      - name: Extract editor (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: Expand-Archive studiocut-renderer.zip -DestinationPath dist/desktop
       - run: npm install --no-audit --no-fund
+      - name: Smoke-test local editor without internet
+        run: npx electron main.cjs --smoke-test
+      - name: Build Windows installer
+        if: runner.os == 'Windows'
+        run: npx electron-builder --win nsis --x64 --publish never
       - name: Build macOS 13+ installer
-        if: matrix.variant != 'intel-monterey'
+        if: runner.os == 'macOS' && matrix.variant != 'macos-intel-monterey'
         run: npx electron-builder --mac dmg zip --${{ matrix.arch }} --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - name: Build Intel macOS Monterey installer
-        if: matrix.variant == 'intel-monterey'
+      - name: Build Intel Monterey installer
+        if: matrix.variant == 'macos-intel-monterey'
         run: npx electron-builder --mac dmg zip --x64 --publish never -c.electronVersion=43.8.3 -c.mac.minimumSystemVersion=12.0.0 '-c.artifactName=StudioCut-${version}-${os}-${arch}-macos12.${ext}'
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
       - uses: actions/upload-artifact@v4
         with:
-          name: studiocut-macos-${{ matrix.variant }}
+          name: studiocut-${{ matrix.variant }}
           path: |
             desktop/dist/*.dmg
             desktop/dist/*.zip
+            desktop/dist/*.exe
           if-no-files-found: error
           retention-days: 30
+      - name: Attach installers to draft release
+        shell: bash
+        run: |
+          shopt -s nullglob
+          files=(dist/*.dmg dist/*.zip dist/*.exe)
+          gh release upload "$RELEASE_TAG" "${files[@]}" --repo "${{ github.repository }}" --clobber
 
-  windows:
-    name: Windows (Intel / AMD 64-bit)
-    runs-on: windows-latest
-    defaults:
-      run:
-        working-directory: desktop
+  finish:
+    needs: installers
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_TAG: ${{ inputs.release_tag }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: 24
-      - run: npm install --no-audit --no-fund
-      - run: npx electron-builder --win nsis --x64 --publish never
-        env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
-      - uses: actions/upload-artifact@v4
-        with:
-          name: studiocut-windows-x64
-          path: desktop/dist/*.exe
-          if-no-files-found: error
-          retention-days: 30
+      - name: Make unsigned preview downloads available
+        run: gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --draft=false --prerelease
