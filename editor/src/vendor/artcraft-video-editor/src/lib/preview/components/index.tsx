@@ -26,6 +26,7 @@ import {
   PreviewViewportProvider,
   usePreviewViewportState,
 } from "./preview-viewport";
+import { CanvasRatioSelect } from "./canvas-ratio-select";
 
 function usePreviewSize() {
   const canvasSize = useEditor(
@@ -107,8 +108,12 @@ function PreviewHeader() {
     <div className="flex h-9 shrink-0 items-center gap-2 border-b border-ui-panel-border px-3">
       <span aria-hidden className="bg-primary size-1.5 rounded-full" />
       <h2 className="text-xs font-semibold tracking-tight">Player</h2>
+      <CanvasRatioSelect />
       {size && (
-        <span className="text-muted-foreground ml-auto font-mono text-[11px]" data-testid="text-canvas-size">
+        <span
+          className="text-muted-foreground ml-auto font-mono text-[11px]"
+          data-testid="text-canvas-size"
+        >
           {size}
         </span>
       )}

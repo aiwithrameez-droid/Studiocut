@@ -586,7 +586,7 @@ function ElementInner({
           >
             <div
               className={cn(
-                "flex shrink-0 items-center overflow-hidden",
+                "relative isolate flex shrink-0 items-center overflow-hidden",
                 getTimelineElementClassName({
                   type: getTrackTypeForElementType({
                     elementType: element.type,
@@ -599,6 +599,13 @@ function ElementInner({
               <div className="flex flex-1 min-h-0 h-full items-center overflow-hidden">
                 <ElementContent element={visibleElement} track={track} />
               </div>
+              {isSelected && (
+                <div
+                  aria-hidden="true"
+                  data-testid="timeline-selected-clip-tint"
+                  className="pointer-events-none absolute inset-0 bg-primary/10"
+                />
+              )}
             </div>
             {expandedContent}
           </button>
