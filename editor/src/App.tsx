@@ -48,8 +48,8 @@ import {
 
 const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
 const isDesktopBuild = import.meta.env.MODE === 'desktop';
-const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/download/studiocut-desktop-v1.1.0';
-const desktopVersion = '1.1.0';
+const desktopReleaseBaseUrl = 'https://github.com/aiwithrameez-droid/Studiocut/releases/download/studiocut-desktop-v1.2.0';
+const desktopVersion = '1.2.0';
 const desktopDownloads = [
   {
     label: 'Windows x64',
@@ -137,6 +137,7 @@ type Asset = { id: string; name: string; kind: AssetKind; duration: number; size
 type Clip = { id: string; assetId?: string; kind: ClipKind; name: string; track: 'video' | 'overlay' | 'audio'; start: number; duration: number; sourceOffset: number; text?: string };
 type Project = { name: string; aspect: '16:9' | '9:16' | '1:1'; fps: number; assets: Asset[]; clips: Clip[] };
 type Snapshot = { past: Project[]; future: Project[] };
+type ImportProgress = { fileName: string; current: number; total: number; phase: 'metadata' | 'storage' };
 
 const DB_NAME = 'studiocut-local-project';
 const DB_VERSION = 1;
@@ -180,13 +181,17 @@ function getFileMediaType(file: File): { kind: AssetKind; mime: string } | null 
   return mediaMimeByExtension[extension] ?? null;
 }
 
+function isQuotaExceeded(error: unknown): boolean {
+  return typeof error === 'object' && error !== null && 'name' in error && error.name === 'QuotaExceededError';
+}
+
 function getMediaDuration(kind: AssetKind, url: string) {
-  return new Promise<{ duration: number; width?: number; height?: number }>((resolve) => {
+  return new Promise<{ duration: number; width?: number; height?: number; error?: string }>((resolve) => {
     let timeout: number | undefined;
     let media: HTMLMediaElement | null = null;
     let image: HTMLImageElement | null = null;
     let settled = false;
-    const finish = (result: { duration: number; width?: number; height?: number }) => {
+    const finish = (result: { duration: number; width?: number; height?: number; error?: string }) => {
       if (settled) return;
       settled = true;
       if (timeout !== undefined) window.clearTimeout(timeout);
@@ -213,14 +218,27 @@ function getMediaDuration(kind: AssetKind, url: string) {
     }
     media = document.createElement(kind === 'video' ? 'video' : 'audio');
     const mediaElement = media;
-    timeout = window.setTimeout(() => finish({ duration: 5 }), 10_000);
+    timeout = window.setTimeout(() => finish({
+      duration: 5,
+      ...(kind === 'video' ? { error: 'Timed out while reading video metadata.' } : {}),
+    }), 10_000);
     media.preload = 'metadata';
-    mediaElement.onloadedmetadata = () => finish({
-      duration: Number.isFinite(mediaElement.duration) && mediaElement.duration > 0 ? mediaElement.duration : 5,
-      width: kind === 'video' ? (mediaElement as HTMLVideoElement).videoWidth : undefined,
-      height: kind === 'video' ? (mediaElement as HTMLVideoElement).videoHeight : undefined,
+    mediaElement.onloadedmetadata = () => {
+      const duration = mediaElement.duration;
+      if (kind === 'video' && (!Number.isFinite(duration) || duration <= 0)) {
+        finish({ duration: 5, error: 'The video did not report valid metadata.' });
+        return;
+      }
+      finish({
+        duration: Number.isFinite(duration) && duration > 0 ? duration : 5,
+        width: kind === 'video' ? (mediaElement as HTMLVideoElement).videoWidth : undefined,
+        height: kind === 'video' ? (mediaElement as HTMLVideoElement).videoHeight : undefined,
+      });
+    };
+    mediaElement.onerror = () => finish({
+      duration: 5,
+      ...(kind === 'video' ? { error: 'The browser could not read this video.' } : {}),
     });
-    mediaElement.onerror = () => finish({ duration: 5 });
     mediaElement.src = url;
     mediaElement.load();
   });
@@ -1118,6 +1136,8 @@ function StudioEditor() {
   const [filter, setFilter] = useState('');
   const [assetTab, setAssetTab] = useState<'all' | 'video' | 'audio' | 'image'>('all');
   const [importHover, setImportHover] = useState(false);
+  const [importProgress, setImportProgress] = useState<ImportProgress | null>(null);
+  const importRunning = useRef(false);
   const [exportOpen, setExportOpen] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -1137,7 +1157,7 @@ function StudioEditor() {
 
   const notify = useCallback((text: string, error = false) => {
     setToast({ text, error });
-    window.setTimeout(() => setToast(null), 3100);
+    window.setTimeout(() => setToast(null), error ? 8000 : 3100);
   }, []);
   const changeProject = useCallback((update: (before: Project) => Project) => {
     const before = projectRef.current;
@@ -1291,38 +1311,75 @@ function StudioEditor() {
 
   const importFiles = useCallback(async (fileList: FileList | File[]) => {
     const files = Array.from(fileList);
+    if (!files.length || importRunning.current) return;
+    importRunning.current = true;
     let importedCount = 0;
     const unsupportedFiles: string[] = [];
-    const failedFiles: string[] = [];
-    for (const file of files) {
-      const detected = getFileMediaType(file);
-      if (!detected) { unsupportedFiles.push(file.name); continue; }
-      const id = newId();
-      const mediaBlob = file.type === detected.mime ? file : file.slice(0, file.size, detected.mime);
-      const url = URL.createObjectURL(mediaBlob);
-      const mediaInfo = await getMediaDuration(detected.kind, url);
-      const asset: Asset = { id, name: file.name, kind: detected.kind, duration: mediaInfo.duration, size: file.size, mime: detected.mime, width: mediaInfo.width, height: mediaInfo.height };
-      try {
-        await dbRequest('media', 'readwrite', (store) => store.put({ id, blob: mediaBlob }));
+    const failedFiles: { name: string; quota: boolean }[] = [];
+    const unreadableFiles: string[] = [];
+    setImportProgress({ fileName: files[0].name, current: 1, total: files.length, phase: 'metadata' });
+    // Give React a paint before starting metadata work on potentially large files.
+    await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+    try {
+      for (const [index, file] of files.entries()) {
+        setImportProgress({ fileName: file.name, current: index + 1, total: files.length, phase: 'metadata' });
+        const detected = getFileMediaType(file);
+        if (!detected) { unsupportedFiles.push(file.name); continue; }
+        const id = newId();
+        const mediaBlob = file.type === detected.mime ? file : file.slice(0, file.size, detected.mime);
+        const url = URL.createObjectURL(mediaBlob);
+        const mediaInfo = await getMediaDuration(detected.kind, url);
+        if (mediaInfo.error && detected.kind === 'video') {
+          URL.revokeObjectURL(url);
+          unreadableFiles.push(file.name);
+          continue;
+        }
+        const asset: Asset = { id, name: file.name, kind: detected.kind, duration: mediaInfo.duration, size: file.size, mime: detected.mime, width: mediaInfo.width, height: mediaInfo.height };
+        setImportProgress({ fileName: file.name, current: index + 1, total: files.length, phase: 'storage' });
+        try {
+          await dbRequest('media', 'readwrite', (store) => store.put({ id, blob: mediaBlob }));
+        } catch (error) {
+          URL.revokeObjectURL(url);
+          failedFiles.push({ name: file.name, quota: isQuotaExceeded(error) });
+          continue;
+        }
         setUrls((before) => ({ ...before, [id]: url }));
         changeProject((before) => ({ ...before, assets: [...before.assets, asset] }));
         addAssetClip(asset);
         importedCount += 1;
-      } catch {
-        URL.revokeObjectURL(url);
-        failedFiles.push(file.name);
       }
-    }
-    if (!files.length) return;
-    const issueCount = unsupportedFiles.length + failedFiles.length;
-    if (importedCount && issueCount) {
-      notify(`${importedCount} imported; ${issueCount} could not be added. Check the file type and available browser storage.`, true);
-    } else if (importedCount) {
-      notify(`${importedCount} item${importedCount === 1 ? '' : 's'} added to your project`);
-    } else if (failedFiles.length) {
-      notify('The selected media could not be saved. Check available browser storage and try a smaller file.', true);
-    } else if (unsupportedFiles.length) {
-      notify(`Unsupported media file${unsupportedFiles.length === 1 ? '' : 's'}: ${unsupportedFiles.slice(0, 2).join(', ')}`, true);
+      const issues: string[] = [];
+      if (unreadableFiles.length) {
+        const names = unreadableFiles.slice(0, 2).join(', ');
+        const more = unreadableFiles.length > 2 ? ` and ${unreadableFiles.length - 2} more` : '';
+        issues.push(`${unreadableFiles.length} video${unreadableFiles.length === 1 ? '' : 's'} could not be read (${names}${more}). The file may be damaged or use a codec this browser cannot play; try an H.264 MP4.`);
+      }
+      if (unsupportedFiles.length) {
+        const names = unsupportedFiles.slice(0, 2).join(', ');
+        const more = unsupportedFiles.length > 2 ? ` and ${unsupportedFiles.length - 2} more` : '';
+        issues.push(`Unsupported media file${unsupportedFiles.length === 1 ? '' : 's'}: ${names}${more}.`);
+      }
+      const quotaFiles = failedFiles.filter((file) => file.quota);
+      const otherFailedFiles = failedFiles.filter((file) => !file.quota);
+      const summarizeNames = (names: string[]) => `${names.slice(0, 2).join(', ')}${names.length > 2 ? ` and ${names.length - 2} more` : ''}`;
+      if (quotaFiles.length) {
+        issues.push(`${quotaFiles.length} file${quotaFiles.length === 1 ? '' : 's'} could not be saved (${summarizeNames(quotaFiles.map((file) => file.name))}). Browser storage is full or a file exceeds the available limit. Download backups before removing unused projects or media, or try smaller files.`);
+      }
+      if (otherFailedFiles.length) {
+        issues.push(`${otherFailedFiles.length} file${otherFailedFiles.length === 1 ? '' : 's'} could not be saved (${summarizeNames(otherFailedFiles.map((file) => file.name))}). Check that browser storage is available, then try again.`);
+      }
+      if (importedCount && issues.length) {
+        notify(`${importedCount} imported. ${issues.join(' ')}`, true);
+      } else if (importedCount) {
+        notify(`${importedCount} item${importedCount === 1 ? '' : 's'} added to your project`);
+      } else if (issues.length) {
+        notify(issues.join(' '), true);
+      }
+    } catch {
+      notify('Import stopped before all files were added. Check browser storage and try importing the remaining files again.', true);
+    } finally {
+      importRunning.current = false;
+      setImportProgress(null);
     }
   }, [addAssetClip, changeProject, notify]);
 
@@ -1534,15 +1591,22 @@ function StudioEditor() {
       </header>
       <section className="workspace">
         <aside className="panel library">
-          <div className="panel-head"><span className="panel-title">Project media</span><div className="panel-tools"><button className="icon-button" aria-label="Import media" title="Import media" onClick={() => fileInputRef.current?.click()}><Plus /></button><button className="icon-button" aria-label="Add title" title="Add title" onClick={addTitle}><Type /></button></div></div>
+          <div className="panel-head"><span className="panel-title">Project media</span><div className="panel-tools"><button className="icon-button" aria-label="Import media" title="Import media" onClick={() => fileInputRef.current?.click()} disabled={Boolean(importProgress)}><Plus /></button><button className="icon-button" aria-label="Add title" title="Add title" onClick={addTitle}><Type /></button></div></div>
           <div className="library-tabs">
             {(['all', 'video', 'audio', 'image'] as const).map((tab) => <button className={`library-tab ${assetTab === tab ? 'active' : ''}`} key={tab} onClick={() => setAssetTab(tab)}>{tab === 'all' ? 'All media' : `${tab[0].toUpperCase()}${tab.slice(1)}`}</button>)}
           </div>
           <div className="library-search"><Search /><input aria-label="Search media" placeholder="Find in project…" value={filter} onChange={(event) => setFilter(event.target.value)} /></div>
-          <button className={`import-box ${importHover ? 'dragging' : ''}`} onClick={() => fileInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); setImportHover(true); }} onDragLeave={() => setImportHover(false)} onDrop={(event) => { event.preventDefault(); setImportHover(false); void importFiles(event.dataTransfer.files); }}>
-            <Upload /><strong>Import your media</strong><span>Video, audio, and images stay on this device</span>
+          <button className={`import-box ${importHover ? 'dragging' : ''}`} onClick={() => fileInputRef.current?.click()} onDragOver={(event) => { event.preventDefault(); if (!importProgress) setImportHover(true); }} onDragLeave={() => setImportHover(false)} onDrop={(event) => { event.preventDefault(); setImportHover(false); if (!importProgress) void importFiles(event.dataTransfer.files); }} disabled={Boolean(importProgress)}>
+            <Upload /><strong>{importProgress ? 'Importing media…' : 'Import your media'}</strong><span>{importProgress ? 'You can keep editing while this file is prepared' : 'Video, audio, and images stay on this device'}</span>
           </button>
-          <input ref={fileInputRef} className="hidden-input" type="file" accept="video/*,audio/*,image/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.mp3,.m4a,.wav,.ogg,.flac,.jpg,.jpeg,.png,.gif,.webp,.avif,.bmp" multiple onChange={(event) => { if (event.target.files) void importFiles(event.target.files); event.target.value = ''; }} />
+          {importProgress && <div className="import-progress" role="status" aria-live="polite">
+            <span className="import-spinner" aria-hidden="true" />
+            <span className="import-progress-copy">
+              <strong>{importProgress.phase === 'metadata' ? 'Reading media details' : 'Saving to this browser'} · {importProgress.current} of {importProgress.total}</strong>
+              <span title={importProgress.fileName}>{importProgress.fileName}</span>
+            </span>
+          </div>}
+          <input ref={fileInputRef} className="hidden-input" type="file" accept="video/*,audio/*,image/*,.mp4,.m4v,.mov,.webm,.mkv,.avi,.mp3,.m4a,.wav,.ogg,.flac,.jpg,.jpeg,.png,.gif,.webp,.avif,.bmp" multiple disabled={Boolean(importProgress)} onChange={(event) => { if (event.target.files) void importFiles(event.target.files); event.target.value = ''; }} />
           <div className="asset-list">
             {filteredAssets.map((asset) => <div className="asset-row" key={asset.id} onDoubleClick={() => addAssetClip(asset)}>
               <div className="asset-thumb">{asset.kind === 'image' && urls[asset.id] ? <img src={urls[asset.id]} alt="" /> : asset.kind === 'video' ? <FileVideo /> : <FileAudio />}</div>
@@ -1557,7 +1621,7 @@ function StudioEditor() {
           <div className="panel-head preview-head"><span className="panel-title">Preview</span><div className="panel-tools"><select aria-label="Canvas aspect ratio" className="aspect-select" value={project.aspect} onChange={(event) => changeProject((before) => ({ ...before, aspect: event.target.value as Project['aspect'] }))}><option value="16:9">16:9 Landscape</option><option value="9:16">9:16 Portrait</option><option value="1:1">1:1 Square</option></select><button className="icon-button" aria-label="Jump to start" title="Go to start" onClick={() => setCurrentTime(0)}><SkipBack /></button><button className="icon-button" aria-label="Fit preview" title="Fit preview" onClick={() => notify('Preview is fitted to the available canvas.')}><Maximize2 /></button></div></div>
           <div className="preview-stage">
             <div className={`preview-frame ${project.aspect === '9:16' ? 'ratio-vertical' : project.aspect === '1:1' ? 'ratio-square' : ''}`}>
-              {currentAsset?.kind === 'video' && currentUrl && visualClip && <video ref={previewVideoRef} src={currentUrl} playsInline preload="metadata" aria-label="Timeline video preview" />}
+              {currentAsset?.kind === 'video' && currentUrl && visualClip && <video ref={previewVideoRef} src={currentUrl} playsInline preload="metadata" aria-label="Timeline video preview" onError={() => notify('This video could not be decoded by your browser. It may use an unsupported codec; try an H.264 MP4.', true)} />}
               {currentAsset?.kind === 'image' && currentUrl && <img src={currentUrl} alt={currentAsset.name} />}
               {!visualClip && <div className="preview-empty"><div className="preview-empty-mark"><Film /></div><span>{project.clips.length ? 'Move the playhead over a clip to preview' : 'Your story starts with a clip'}</span></div>}
               {activeTitle && <div className="preview-title">{activeTitle.text}</div>}

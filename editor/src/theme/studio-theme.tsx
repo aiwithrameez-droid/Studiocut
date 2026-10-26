@@ -36,13 +36,13 @@ const createPastelTheme = (
   hue: number,
 ): StudioTheme => {
   const foreground = `${hue} 24% 14%`;
-  const border = `${hue} 20% 66%`;
-  const card = `${hue} 42% 99%`;
-  const sidebar = `${hue} 30% 94%`;
-  const soft = `${hue} 28% 91%`;
-  const mutedForeground = `${hue} 12% 39%`;
+  const border = `${hue} 28% 61%`;
+  const card = `${hue} 44% 97%`;
+  const sidebar = `${hue} 38% 86%`;
+  const soft = `${hue} 48% 82%`;
+  const mutedForeground = `${hue} 16% 31%`;
   // Keep semantic accent text and controls readable on the light surfaces.
-  const primary = `${hue} 55% 30%`;
+  const primary = `${hue} 66% 28%`;
   const primaryForeground = "0 0% 100%";
 
   return {
@@ -52,7 +52,7 @@ const createPastelTheme = (
     colorScheme: "light",
     tokens: {
       "--studio-accent": swatch,
-      "--background": `${hue} 35% 97%`,
+      "--background": `${hue} 38% 94%`,
       "--foreground": foreground,
       "--border": border,
       "--card": card,
@@ -60,7 +60,7 @@ const createPastelTheme = (
       "--card-border": border,
       "--sidebar": sidebar,
       "--sidebar-foreground": foreground,
-      "--sidebar-border": `${hue} 20% 68%`,
+      "--sidebar-border": `${hue} 28% 58%`,
       "--sidebar-primary": primary,
       "--sidebar-primary-foreground": primaryForeground,
       "--sidebar-accent": soft,
@@ -73,11 +73,11 @@ const createPastelTheme = (
       "--primary-foreground": primaryForeground,
       "--secondary": soft,
       "--secondary-foreground": foreground,
-      "--muted": `${hue} 26% 93%`,
+      "--muted": `${hue} 38% 88%`,
       "--muted-foreground": mutedForeground,
       "--accent": soft,
       "--accent-foreground": foreground,
-      "--input": `${hue} 17% 50%`,
+      "--input": `${hue} 28% 46%`,
       "--ring": primary,
       "--chart-1": primary,
     },
@@ -156,6 +156,18 @@ function readSavedTheme(): StudioThemeId {
 export function StudioThemeProvider({ children }: { children: ReactNode }) {
   const [themeId, setThemeId] = useState<StudioThemeId>(readSavedTheme);
   const theme = themeById.get(themeId) ?? STUDIO_THEMES[0];
+
+  useEffect(() => {
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key !== THEME_STORAGE_KEY || !event.newValue) return;
+      if (themeById.has(event.newValue as StudioThemeId)) {
+        setThemeId(event.newValue as StudioThemeId);
+      }
+    };
+
+    window.addEventListener("storage", handleStorage);
+    return () => window.removeEventListener("storage", handleStorage);
+  }, []);
 
   useEffect(() => {
     const root = document.documentElement;

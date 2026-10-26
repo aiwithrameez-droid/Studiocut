@@ -3,12 +3,25 @@
 import { useEffect, useState } from "react";
 import { TransitionTopIcon } from "@hugeicons/core-free-icons";
 import { HugeiconsIcon } from "@hugeicons/react";
-import { Popover, PopoverContent, PopoverTrigger } from "../ui/popover";
 import { Button } from "../ui/button";
 import { Label } from "../ui/label";
 import { RadioGroup, RadioGroupItem } from "../ui/radio-group";
 import { Progress } from "../ui/progress";
 import { Checkbox } from "../ui/checkbox";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogTitle,
+  DialogTrigger,
+} from "../ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "../ui/select";
 import { cn } from "../../utils/ui";
 import { getExportMimeType, getExportFileExtension } from "../../export";
 import { AlertCircle, Check, Copy, Download, Library, Loader2, RotateCcw } from "lucide-react";
@@ -25,9 +38,12 @@ import {
   SectionTitle,
 } from "../section";
 import { useEditor } from "../../editor/use-editor";
+import { useEditorStore } from "../../editor/editor-store";
 import { useEditorAdapters } from "../../EditorProvider";
 import { DEFAULT_EXPORT_OPTIONS } from "../../export/defaults";
 import { mediaTimeToSeconds } from "../../wasm";
+import { dimensionToAspectRatio } from "../../utils/geometry";
+import type { TCanvasSize } from "../../project/types";
 import {
   initializeGpuRenderer,
   isGpuAvailable,
@@ -126,11 +142,11 @@ export function ExportButton() {
   };
 
   return (
-    <Popover
+    <Dialog
       open={isExportPopoverOpen}
       onOpenChange={(open) => handlePopoverOpenChange({ open })}
     >
-      <PopoverTrigger asChild>
+      <DialogTrigger asChild>
         <Button
           type="button"
           className={cn(
@@ -138,23 +154,31 @@ export function ExportButton() {
               ? "cursor-pointer"
               : "cursor-not-allowed opacity-50",
           )}
-          onClick={hasProject && gpuAvailable ? () => setIsExportPopoverOpen(true) : undefined}
           disabled={!hasProject || !gpuAvailable}
           title={!gpuAvailable ? "Video export needs WebGPU or WebGL graphics acceleration." : undefined}
-          onKeyDown={(event) => {
-            if (hasProject && gpuAvailable && (event.key === "Enter" || event.key === " ")) {
-              event.preventDefault();
-              setIsExportPopoverOpen(true);
-            }
-          }}
         >
           <HugeiconsIcon icon={TransitionTopIcon} className="z-50 size-3.5" />
           <span className="z-50 text-[0.875rem]">Export</span>
         </Button>
-      </PopoverTrigger>
-      {hasProject && <ExportPopover onOpenChange={setIsExportPopoverOpen} />}
-    </Popover>
+      </DialogTrigger>
+      {hasProject && <ExportPopover onOpenChange={handlePopoverOpenChange} />}
+    </Dialog>
   );
+}
+
+function getCanvasSizeValue({ width, height }: TCanvasSize) {
+  return `${width}x${height}`;
+}
+
+function getCanvasPresetLabel({ width, height }: TCanvasSize) {
+  const ratio = dimensionToAspectRatio({ width, height });
+  const ratioName: Record<string, string> = {
+    "16:9": "Landscape",
+    "9:16": "Portrait",
+    "1:1": "Square",
+    "4:3": "Classic",
+  };
+  return `${ratio} ${ratioName[ratio] ? `· ${ratioName[ratio]}` : ""}  ·  ${width} × ${height}`;
 }
 
 function ExportPopover({
@@ -167,6 +191,17 @@ function ExportPopover({
   const activeProject = useEditor((e) => e.project.getActive());
   const exportState = useEditor((e) => e.project.getExportState());
   const { isExporting, progress, result: exportResult } = exportState;
+  const canvasPresets = useEditorStore((state) => state.canvasPresets);
+  const currentCanvasSize = activeProject.settings.canvasSize;
+  const currentCanvasValue = getCanvasSizeValue(currentCanvasSize);
+  const hasMatchingPreset = canvasPresets.some(
+    (preset) => getCanvasSizeValue(preset) === currentCanvasValue,
+  );
+  const isCustomCanvas =
+    activeProject.settings.canvasSizeMode === "custom" || !hasMatchingPreset;
+  const canvasSelectValue = isCustomCanvas
+    ? `custom:${currentCanvasValue}`
+    : currentCanvasValue;
   const [format, setFormat] = useState<ExportFormat>(
     DEFAULT_EXPORT_OPTIONS.format,
   );
@@ -259,24 +294,85 @@ function ExportPopover({
   };
 
   return (
-    <PopoverContent className="bg-ui-controls mr-4 flex w-80 flex-col p-0">
-      {exportResult && !exportResult.success ? (
-        <ExportError
-          error={exportResult.error || "Unknown error occurred"}
-          onRetry={handleExport}
-        />
-      ) : (
-        <>
-          <div className="flex items-center justify-between p-3 border-b border-ui-controls-border">
-            <h3 className="font-medium text-sm">
-              {isExporting ? "Exporting project" : "Export project"}
-            </h3>
-          </div>
+    <DialogContent
+      aria-describedby="export-project-description"
+      className="flex w-[calc(100%-2rem)] max-w-[min(32rem,calc(100vw-2rem))] max-h-[calc(100dvh-2rem)] flex-col gap-0 overflow-hidden bg-ui-controls p-0"
+    >
+      <div className="shrink-0 border-b border-ui-controls-border p-4 pr-14">
+        <DialogTitle className="text-sm font-semibold">
+          {isExporting
+            ? "Exporting project"
+            : saveState.phase === "settled"
+                ? saveState.disk.status === "error" ||
+                  saveState.library.status === "error"
+                  ? "Export finished with errors"
+                  : "Export saved"
+              : exportResult && !exportResult.success
+                ? "Export failed"
+                : "Export project"}
+        </DialogTitle>
+        <DialogDescription id="export-project-description" className="mt-1 text-xs">
+          Choose a canvas, format and quality for your video.
+        </DialogDescription>
+      </div>
 
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        {exportResult && !exportResult.success ? (
+          <ExportError
+            error={exportResult.error || "Unknown error occurred"}
+            onRetry={handleExport}
+          />
+        ) : (
           <div className="flex flex-col gap-4">
             {!isExporting && saveState.phase === "idle" && (
               <>
                 <div className="flex flex-col">
+                  <Section showTopBorder={false}>
+                    <SectionHeader>
+                      <SectionTitle>Canvas</SectionTitle>
+                    </SectionHeader>
+                    <SectionContent className="space-y-2">
+                      <Select
+                        value={canvasSelectValue}
+                        onValueChange={(value) => {
+                          if (value.startsWith("custom:")) return;
+                          const preset = canvasPresets.find(
+                            (candidate) =>
+                              getCanvasSizeValue(candidate) === value,
+                          );
+                          if (!preset) return;
+                          editor.project.updateSettings({
+                            settings: {
+                              canvasSize: preset,
+                              canvasSizeMode: "preset",
+                            },
+                          });
+                        }}
+                      >
+                        <SelectTrigger aria-label="Export canvas size" className="w-full">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent className="z-[260]">
+                          {canvasPresets.map((preset) => (
+                            <SelectItem
+                              key={getCanvasSizeValue(preset)}
+                              value={getCanvasSizeValue(preset)}
+                            >
+                              {getCanvasPresetLabel(preset)}
+                            </SelectItem>
+                          ))}
+                          {isCustomCanvas && (
+                            <SelectItem value={canvasSelectValue}>
+                              Custom  ·  {currentCanvasSize.width} × {currentCanvasSize.height}
+                            </SelectItem>
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-muted-foreground">
+                        Output: {dimensionToAspectRatio(currentCanvasSize)} · {currentCanvasSize.width} × {currentCanvasSize.height} px
+                      </p>
+                    </SectionContent>
+                  </Section>
                   <Section
                     collapsible
                     defaultOpen={false}
@@ -447,9 +543,9 @@ function ExportPopover({
               />
             )}
           </div>
-        </>
-      )}
-    </PopoverContent>
+        )}
+      </div>
+    </DialogContent>
   );
 }
 

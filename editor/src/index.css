@@ -557,6 +557,13 @@ button:disabled { cursor: not-allowed; opacity: .42; }
 .import-box svg { width:21px;height:21px;color:#b4c406; }
 .import-box strong { font-size:12px;font-weight:600;color:#d7e3df; }
 .import-box span { font-size:10px;color:#899796; }
+.import-box:disabled { cursor:wait;opacity:.72; }
+.import-progress { display:flex;align-items:center;gap:9px;margin:-4px 12px 13px;padding:9px 10px;border:1px solid var(--editor-edge);border-radius:7px;background:var(--editor-secondary);color:var(--editor-text); }
+.import-spinner { width:14px;height:14px;flex:0 0 14px;border:2px solid var(--editor-muted);border-top-color:var(--editor-primary);border-radius:50%;animation:import-spin .8s linear infinite; }
+.import-progress-copy { min-width:0;display:flex;flex-direction:column;gap:3px;font-size:10px; }
+.import-progress-copy strong { font-size:10px;font-weight:600; }
+.import-progress-copy span { overflow:hidden;color:var(--editor-muted);text-overflow:ellipsis;white-space:nowrap; }
+@keyframes import-spin { to { transform:rotate(360deg); } }
 .asset-list { overflow:auto;padding:0 10px 16px; }
 .asset-row { display:flex;align-items:center;gap:9px;padding:8px 7px;border-radius:6px;cursor:pointer;min-width:0; }
 .asset-row:hover { background:#282d36; }
@@ -882,16 +889,17 @@ body { background: hsl(var(--background)); color: hsl(var(--foreground)); }
 
 .studio-theme-picker {
   display: inline-flex;
-  height: 32px;
+  height: 34px;
   min-width: 112px;
   align-items: center;
   gap: 7px;
   padding: 0 8px;
-  border: 1px solid hsl(var(--border));
+  border: 1px solid hsl(var(--primary) / .45);
   border-radius: 6px;
-  background: hsl(var(--background));
+  background: hsl(var(--sidebar));
   color: hsl(var(--foreground));
-  transition: border-color .15s ease, background-color .15s ease;
+  box-shadow: inset 0 0 0 1px hsl(var(--primary) / .12);
+  transition: border-color .15s ease, background-color .15s ease, box-shadow .15s ease;
 }
 .studio-theme-picker:focus-within {
   outline: 2px solid hsl(var(--ring));
@@ -911,11 +919,12 @@ body { background: hsl(var(--background)); color: hsl(var(--foreground)); }
 }
 .studio-theme-picker option { background: hsl(var(--popover)); color: hsl(var(--popover-foreground)); }
 .studio-theme-swatch {
-  width: 10px;
-  height: 10px;
+  width: 13px;
+  height: 13px;
   flex: 0 0 auto;
-  border: 1px solid hsl(var(--foreground) / .18);
+  border: 2px solid hsl(var(--background));
   border-radius: 50%;
+  box-shadow: 0 0 0 1px hsl(var(--primary) / .35);
 }
 .studio-accent-mark-shadow { box-shadow: 0 5px 20px color-mix(in srgb, var(--studio-accent) 18%, transparent); }
 .studio-accent-dot-shadow { box-shadow: 0 0 12px color-mix(in srgb, var(--studio-accent) 48%, transparent); }
